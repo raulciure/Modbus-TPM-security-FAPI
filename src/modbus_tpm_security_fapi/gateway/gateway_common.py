@@ -1,0 +1,5 @@
+SOCKET_TIMEOUT = 2      # Socket timeout interval - in seconds
+SOCKET_RESET_MESSAGE = b'\x01\x01\x01\x01'
+
+MODBUS_TCP_PAYLOAD_LENGHTH_INDEX = 2
+MODBUS_TCP_HEADER_FORMAT = "!HHH"
