@@ -6,7 +6,6 @@ from time import time
 from enum import IntEnum
 from src.modbus_tpm_security_fapi.packet_format import Formatter
 from src.modbus_tpm_security_fapi.rekeyer import Rekeyer, RekeyerDisabler
-from src.modbus_tpm_security_fapi.perf_measure.latency_measure import LatencyMeter
 
 
 class CipherTypes(IntEnum):
@@ -93,10 +92,7 @@ class SymCipher:
     __key : bytes
     __timestamp_tolerance : int
     __rekeyer : Rekeyer
-    __debug_flag : bool
-
-    __latency_meter_enc : LatencyMeter | None
-    __latency_meter_dec : LatencyMeter | None
+    __debug_flag : int
 
 
     def __init__(self, args, cipher_type : int, sym_key : bytes) -> None:
@@ -105,10 +101,14 @@ class SymCipher:
         self.__timestamp_tolerance = 1      # Tolerance for timestamp deviation (in seconds)
 
         if args is not None:
-            if args.debug:
-                self.__debug_flag = True
+            if args.v:
+                self.__debug_flag = 1
+            elif args.vv:
+                self.__debug_flag = 2
+            elif args.vvv:
+                self.__debug_flag = 3
             else:
-                self.__debug_flag = False
+                self.__debug_flag = 0
             
             if args.disable_rekeying:
                 self.__rekeyer = RekeyerDisabler()
@@ -120,28 +120,17 @@ class SymCipher:
             else:
                 self.__timestamp_tolerance = args.set_timestamp_tolerance
 
-            if args.measure_perf:
-                self.__latency_meter_enc = LatencyMeter()
-                self.__latency_meter_dec = LatencyMeter()
-            else:
-                self.__latency_meter_enc = self.__latency_meter_dec = None
-
         else:                               # Case when args is None (external debug/tests)
             self.__rekeyer = RekeyerDisabler()
             self.__timestamp_tolerance = -1
-            self.__debug_flag = True
-
-    def get_latency_meters(self):
-        if self.__latency_meter_enc is None or self.__latency_meter_dec is None:
-            return None
-        return (self.__latency_meter_enc.get_average_latency(), self.__latency_meter_dec.get_average_latency())
+            self.__debug_flag = 3
 
     def __update_key(self, *, called_before_send : bool):
         if not isinstance(self.__rekeyer, RekeyerDisabler):
             rekeyer_key = self.__rekeyer.get_new_key(called_before_send=called_before_send)
             if rekeyer_key is not None and rekeyer_key != self.__key:
                 self.__key = rekeyer_key
-                if self.__debug_flag is True:
+                if self.__debug_flag >= 3:
                     print("\t* New symmetric key applied! *")
                     print("\tNew key: ", rekeyer_key.hex(' '))
 
@@ -165,15 +154,9 @@ class SymCipher:
         cipher.update(timestamp)
 
         if isinstance(cipher, ChaCha20Poly1305Cipher):
-            if self.__latency_meter_enc is not None:
-                (ciphertext, MAC_tag) = self.__latency_meter_enc.measure_latency(lambda: cipher.encrypt_and_digest(msg))
-            else:
-                (ciphertext, MAC_tag) = cipher.encrypt_and_digest(msg)  # ChaCha20 is a stream cipher => no padding required
+            (ciphertext, MAC_tag) = cipher.encrypt_and_digest(msg)  # ChaCha20 is a stream cipher => no padding required
         else:
-            if self.__latency_meter_enc is not None:
-                (ciphertext, MAC_tag) = self.__latency_meter_enc.measure_latency(lambda: cipher.encrypt_and_digest(pad(msg, AES.block_size)))
-            else:
-                (ciphertext, MAC_tag) = cipher.encrypt_and_digest(pad(msg, AES.block_size))
+            (ciphertext, MAC_tag) = cipher.encrypt_and_digest(pad(msg, AES.block_size))
 
         return (nonce, timestamp, ciphertext, MAC_tag)
 
@@ -195,15 +178,9 @@ class SymCipher:
             cipher.update(timestamp_msg)
 
             if isinstance(cipher, ChaCha20Poly1305Cipher):
-                if self.__latency_meter_dec is not None:
-                    msg = self.__latency_meter_dec.measure_latency(lambda: cipher.decrypt_and_verify(ciphertext, MAC_tag))
-                else:
-                    msg = cipher.decrypt_and_verify(ciphertext, MAC_tag)
+                msg = cipher.decrypt_and_verify(ciphertext, MAC_tag)
             else:
-                if self.__latency_meter_dec is not None:
-                    msg = self.__latency_meter_dec.measure_latency(lambda: unpad(cipher.decrypt_and_verify(ciphertext, MAC_tag), AES.block_size))
-                else:
-                    msg = unpad(cipher.decrypt_and_verify(ciphertext, MAC_tag), AES.block_size)
+                msg = unpad(cipher.decrypt_and_verify(ciphertext, MAC_tag), AES.block_size)
         
             if self.__timestamp_tolerance > -1:  # Check if replay resistance is disabled
                 if(abs(timestamp_now - int.from_bytes(timestamp_msg)) > self.__timestamp_tolerance):    # Verify timestamp
@@ -227,7 +204,7 @@ class SymCipher:
                 try:
                     data = self.__decrypt_and_verify(nonce, timestamp_msg, ciphertext, MAC_tag, old_sym_key)
                     self.__rekeyer.set_fail_flag()
-                    if self.__debug_flag:
+                    if self.__debug_flag >= 1:
                         print("*** Rekeying failed! Reverting to old key! ***")
                     self.__key = old_sym_key
                     return data

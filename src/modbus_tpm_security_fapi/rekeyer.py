@@ -43,10 +43,10 @@ class Rekeyer:
     __fail_flag = False
     __rekey_clear = False           # Flag indicating whether change to new key should happen (is cleared to happen)
 
-    __debug_flag : bool             # Flag indicating if debug information should be printed
+    __debug_flag : int             # Flag indicating if debug information should be printed
 
 
-    def __init__(self, rekey_time : int, *, recv_state : int = RekeyStates.REKEY_NONE, send_state : int = RekeyStates.REKEY_NONE, debug_flag : bool = False) -> None:
+    def __init__(self, rekey_time : int, *, recv_state : int = RekeyStates.REKEY_NONE, send_state : int = RekeyStates.REKEY_NONE, debug_flag : int = 0) -> None:
         self.__recv_state = recv_state
         self.__send_state = send_state
         self.__rekey_time : Final[int] = rekey_time
@@ -106,7 +106,7 @@ class Rekeyer:
             self.__send_state = RekeyStates.REKEY_NONE
             self.__reset_all()
         
-        if self.__debug_flag:
+        if self.__debug_flag >= 3:
             print("\t---Getting send flag---")
             print("\tsend_rekey_flag = ", self.__send_state)
 
@@ -167,7 +167,7 @@ class Rekeyer:
             else:
                 raise ValueError("__is_initiator is not bool type (is None)")
         
-        if self.__debug_flag:
+        if self.__debug_flag >= 3:
             print("\t---Handling rekey data---")
             print("\trecv_rekey_flag = ", self.__recv_state)
             print("\tsend_rekey_flag = ", self.__send_state)
@@ -215,7 +215,7 @@ class Rekeyer:
                 self.__rekey_clear = True       # New key can now be used
 
                 self.__rekey_switch_time = int(time())  # Set rekey time to current time
-                if self.__debug_flag:
+                if self.__debug_flag >= 3:
                     print("\t* New ECDH key exchange performed! *")
                 self.__reset_most()
             else:

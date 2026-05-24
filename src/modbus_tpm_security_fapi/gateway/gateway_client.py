@@ -13,9 +13,11 @@ from src.modbus_tpm_security_fapi.netcomm import NetComm
 exit_flag = False
 reset_flag = False
 
+debug_level = 0
+
 
 # source is the client | dest is the server gateway
-def forward_source_dest(args, communicator_source : NetComm, communicator_dest : NetComm, cipher : SymCipher):
+def forward_source_dest(communicator_source : NetComm, communicator_dest : NetComm, cipher : SymCipher, latency_meter : latency_measure.LatencyMeter | None = None):
     global reset_flag
 
     while not exit_flag and not reset_flag:
@@ -32,19 +34,22 @@ def forward_source_dest(args, communicator_source : NetComm, communicator_dest :
             print("Source socket (client) error or disconnection. Resetting connection...")
             break
 
-        # if args.debug:
-        print("\nReceived from source: ", data)
+        if debug_level >= 1:
+            print("\nReceived from source: ", data)
 
-        enc_data = cipher.encrypt_and_digest(data)
+        if latency_meter is not None:
+            enc_data = latency_meter.measure_latency(lambda: cipher.encrypt_and_digest(data))
+        else:
+            enc_data = cipher.encrypt_and_digest(data)
 
         try:
             communicator_dest.send(enc_data)
 
-            # if args.debug:
-            print("Sent to dest: ", enc_data)
+            if debug_level >= 1:
+                print("Sent to dest: ", enc_data)
             
-            # if args.debug:
-            print("Used key: ", cipher.get_sym_key())
+            if debug_level >= 2:
+                print("Used key: ", cipher.get_sym_key())
         except(BrokenPipeError):
             reset_flag = True
             print("*** Destination socket (server gateway) is broken (BrokenPipeError). Resetting connection... ***")
@@ -58,7 +63,7 @@ def forward_source_dest(args, communicator_source : NetComm, communicator_dest :
 
 
 # source is the client | dest is the server gateway
-def forward_dest_source(args, communicator_source : NetComm, communicator_dest : NetComm, cipher : SymCipher):
+def forward_dest_source(communicator_source : NetComm, communicator_dest : NetComm, cipher : SymCipher, latency_meter : latency_measure.LatencyMeter | None = None):
     global reset_flag
 
     while not exit_flag and not reset_flag:
@@ -76,17 +81,20 @@ def forward_dest_source(args, communicator_source : NetComm, communicator_dest :
             communicator_dest.send(cipher.encrypt_and_digest(gateway_common.SOCKET_RESET_MESSAGE, is_reset_msg=True))
             break
 
-        # if args.debug:
-        print("\nReceived from dest: ", enc_data)
+        if debug_level >= 1:
+            print("\nReceived from dest: ", enc_data)
 
-        # if args.debug:
-        print("Used key: ", cipher.get_sym_key())
+        if debug_level >= 2:
+            print("Used key: ", cipher.get_sym_key())
 
         try:
-            data = cipher.decrypt_and_verify(enc_data)
+            if latency_meter is not None:
+                data = latency_meter.measure_latency(lambda: cipher.decrypt_and_verify(enc_data))
+            else:
+                data = cipher.decrypt_and_verify(enc_data)
 
-            # if args.debug:
-            print("Sent to source: ", data)
+            if debug_level >= 1:
+                print("Sent to source: ", data)
 
             if(data == gateway_common.SOCKET_RESET_MESSAGE):
                 reset_flag = True
@@ -107,8 +115,13 @@ def handle_transfer(args, source_socket : socket.socket, dest_socket : socket.so
                                   headerless_send=True, header_receive=True)
     communicator_dest = NetComm(dest_socket)
 
-    forward_source_dest_thread = threading.Thread(target = forward_source_dest, args = (args, communicator_source, communicator_dest, cipher))
-    forward_dest_source_thread = threading.Thread(target = forward_dest_source, args = (args, communicator_source, communicator_dest, cipher))
+    latency_meter_enc = latency_meter_dec = None
+    if args.measure_perf:
+        latency_meter_enc = latency_measure.LatencyMeter()
+        latency_meter_dec = latency_measure.LatencyMeter()
+
+    forward_source_dest_thread = threading.Thread(target = forward_source_dest, args = (communicator_source, communicator_dest, cipher, latency_meter_enc))
+    forward_dest_source_thread = threading.Thread(target = forward_dest_source, args = (communicator_source, communicator_dest, cipher, latency_meter_dec))
 
     forward_source_dest_thread.start()
     forward_dest_source_thread.start()
@@ -128,12 +141,9 @@ def handle_transfer(args, source_socket : socket.socket, dest_socket : socket.so
 
     print("Threads closed successfully.")
 
-    if args.measure_perf:
-        sym_cipher_latencies = cipher.get_latency_meters()
-        if sym_cipher_latencies is not None:
-            latency_measure.export_to_file_sym_cipher(sym_cipher_latencies[0], sym_cipher_latencies[1])
-        else:
-            raise ValueError("[handle_transfer] sym_cipher_latencies is None")
+    if args.measure_perf and (latency_meter_enc is not None and latency_meter_dec is not None):
+        latency_measure.export_to_file_sym_cipher(latency_meter_enc.get_average_latency(), latency_meter_enc.get_average_runs(),
+                                                   latency_meter_dec.get_average_latency(), latency_meter_dec.get_average_runs())
 
 
 def main(): 
@@ -158,6 +168,14 @@ def main():
     if args.dest_ip:
         dest_ip = args.dest_ip
 
+    global debug_level
+    if args.v:
+        debug_level = 1
+    elif args.vv:
+        debug_level = 2
+    elif args.vvv:
+        debug_level = 3
+
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)     # Set TCP_NODELAY
     server_socket.bind((host_ip, host_port))
@@ -169,9 +187,6 @@ def main():
 
         print(f"[*] Listening on {host_ip}:{host_port}")
 
-        source_socket, source_addr = server_socket.accept()
-        print(f"[*] Accepted connection from client(source): {source_addr}")
-
         dest_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         dest_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)     # Set TCP_NODELAY
         dest_socket.connect((dest_ip, dest_port))
@@ -180,11 +195,15 @@ def main():
         if args.measure_perf:
             latency_meter = latency_measure.LatencyMeter()
             # do key exchange here
-            sym_key = latency_meter.measure_latency(lambda: DH_key_exchange(dest_socket)) # for server gateway use 'source_socket' | for client gateway use 'dest_socket'
-            latency_measure.export_to_file_key_exchange(latency_meter.get_average_latency())
+            sym_key = latency_meter.measure_latency(lambda: DH_key_exchange(dest_socket))  # for server gateway use 'source_socket' | for client gateway use 'dest_socket'
+            latency_measure.export_to_file_key_exchange(latency_meter.get_average_latency(), latency_meter.get_average_runs())
         else:
             # do key exchange here
-            sym_key = DH_key_exchange(dest_socket) # for server gateway use 'source_socket' | for client gateway use 'dest_socket'
+            sym_key = DH_key_exchange(dest_socket)                                         # for server gateway use 'source_socket' | for client gateway use 'dest_socket'
+
+        # Connect to client endpoint (SCADA server)
+        source_socket, source_addr = server_socket.accept()
+        print(f"[*] Accepted connection from client(source): {source_addr}")
 
         # If sym_key generated & transferred successfully proceed with normal data handling
         if(sym_key != None):

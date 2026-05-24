@@ -1,3 +1,4 @@
+import os
 import socket
 import struct
 from src.modbus_tpm_security_fapi.security import *
@@ -9,6 +10,7 @@ from src.modbus_tpm_security_fapi.auth_handshake.auth_handshake_common import TP
 HEADER_FORMAT = "!HH"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
+PEER_AUTH_PUB_KEY_FILE_PATH = os.path.join("/home/raul/Desktop/Modbus-TPM-security-FAPI/src/modbus_tpm_security_fapi/auth_handshake", PEER_PUB_KEY_FILE_NAME)
 
 def pack(data : bytes, signature : bytes) -> bytes:
     header = struct.pack(HEADER_FORMAT, len(data), len(signature))
@@ -55,7 +57,7 @@ def DH_key_exchange(gateway_socket : socket.socket):
     source_address = gateway_socket.getsockname()[0]    # get IP addresses of devices
     dest_address = gateway_socket.getpeername()[0]
 
-    file_peer_auth_pub_key = read_file(PEER_PUB_KEY_FILE_NAME)
+    file_peer_auth_pub_key = read_file(PEER_AUTH_PUB_KEY_FILE_PATH)
 
     # Check if local peer_auth_pub_key is authentic (with TPM), to make sure the other device is the known one
     if TpmSealer(TPM_PEER_PUB_KEY_SEAL_NAME).verify_with_seal(file_peer_auth_pub_key) is False:

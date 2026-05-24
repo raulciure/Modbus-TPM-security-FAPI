@@ -3,7 +3,6 @@ from Crypto.Signature import pss
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import ECC
 from Crypto.Protocol import DH
-from src.modbus_tpm_security_fapi.tpm_security import get_random
 
 
 def verify_RSA_signature(RSA_key : bytes | str, data : bytes, signature : bytes) -> bool:
@@ -20,7 +19,7 @@ def verify_RSA_signature(RSA_key : bytes | str, data : bytes, signature : bytes)
 # Generate an ECC key
 def ECC_key_gen() -> ECC.EccKey:
     ECC_CURVE = "Curve25519"    # X25519 curve
-    key = ECC.generate(curve=ECC_CURVE, randfunc=get_random)    # type: ignore
+    key = ECC.generate(curve=ECC_CURVE)    # type: ignore
     return key
 
 
