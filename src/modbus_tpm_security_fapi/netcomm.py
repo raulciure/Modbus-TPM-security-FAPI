@@ -7,7 +7,7 @@ class NetComm:
     __header_format : str
     __header_length : int
     __max_msg_size : int
-    __length_index : int    # The index in the header, where the byte(s) showing the remaining packet size reside
+    __length_byte_index : int    # The index in the header where the byte(s) showing the remaining packet size reside
 
     __headerless_send : bool
     __header_receive : bool
@@ -17,12 +17,12 @@ class NetComm:
         self.__conn_socket = conn_socket
         self.__header_format = header_format
         self.__header_length = struct.calcsize(self.__header_format)
-        self.__length_index = length_index
+        self.__length_byte_index = length_index
         
         self.__headerless_send = headerless_send
         self.__header_receive = header_receive
 
-        if self.__length_index > len(self.__header_format) - 1:            # Check if provided length_index is bigger than the number of elements in the header
+        if self.__length_byte_index > len(self.__header_format) - 1:            # Check if provided length_index is bigger than the number of elements in the header
             raise ValueError("length_index cannot be bigger than provided packet structure size")
 
         if max_msg_size is None:
@@ -57,7 +57,7 @@ class NetComm:
 
     def receive(self):
         header = self.__recv_exact(self.__header_length)
-        payload_size = struct.unpack(self.__header_format, header)[self.__length_index]
+        payload_size = struct.unpack(self.__header_format, header)[self.__length_byte_index]
 
         if payload_size > self.__max_msg_size:
             raise ValueError(f"*** Message size exceeded!\nMaximum: {self.__max_msg_size} bytes | Actual: {payload_size} bytes ***")

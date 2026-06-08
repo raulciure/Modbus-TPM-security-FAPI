@@ -152,6 +152,7 @@ class SymCipher:
 
         timestamp = int(time()).to_bytes(4)
         cipher.update(timestamp)
+        cipher.update(nonce)
 
         if isinstance(cipher, ChaCha20Poly1305Cipher):
             (ciphertext, MAC_tag) = cipher.encrypt_and_digest(msg)  # ChaCha20 is a stream cipher => no padding required
@@ -176,6 +177,7 @@ class SymCipher:
 
         try:
             cipher.update(timestamp_msg)
+            cipher.update(nonce)
 
             if isinstance(cipher, ChaCha20Poly1305Cipher):
                 msg = cipher.decrypt_and_verify(ciphertext, MAC_tag)
