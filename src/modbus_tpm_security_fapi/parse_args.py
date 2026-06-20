@@ -3,7 +3,6 @@ import os
 
 
 def parse_args_main(prog_path : str):
-    # from src.modbus_tpm_security.gateway.gateway_common import REKEY_TIME
     from src.modbus_tpm_security_fapi.sym_cipher import CipherTypes
 
     parser = argparse.ArgumentParser(os.path.basename(prog_path))
@@ -19,8 +18,8 @@ def parse_args_main(prog_path : str):
     parser.add_argument("-v", action="store_true", help="Turn on verbose text level 1")
     parser.add_argument("-vv", action="store_true", help="Turn on verbose text level 2")
     parser.add_argument("-vvv", action="store_true", help="Turn on verbose text level 3")
-
-    parser.add_argument("--set-cipher", type=CipherTypes.get_cipher_index, choices=CipherTypes.get_cipher_list_str(), default="AES_GCM",
+    
+    parser.add_argument("--set-cipher", type=CipherTypes.get_cipher_index, default=CipherTypes.get_cipher_index("AES_GCM"),
                         metavar=CipherTypes.get_cipher_formatted_list(), help="Set symmetric cipher to use (default: AES_GCM)")
 
     args = parser.parse_args()

@@ -49,7 +49,7 @@ def forward_source_dest(communicator_source : NetComm, communicator_dest : NetCo
             if debug_level >= 1:
                 print("Sent to dest: ", data)
 
-            if(data == gateway_common.SOCKET_RESET_MESSAGE):
+            if data == gateway_common.SOCKET_RESET_MESSAGE:
                 reset_flag = True
                 print("Reset message received!")
                 break
@@ -57,7 +57,7 @@ def forward_source_dest(communicator_source : NetComm, communicator_dest : NetCo
             communicator_dest.send(data)
         except ValueError:
             print("**** !!! Message tampered or key is incorrect !!! ****")
-        except(BrokenPipeError):
+        except BrokenPipeError:
             reset_flag = True
             print("*** Destination socket (server) is broken (BrokenPipeError). Resetting connection... ***")
 
@@ -97,22 +97,23 @@ def forward_dest_source(communicator_source : NetComm, communicator_dest : NetCo
 
         try:
             communicator_source.send(enc_data)
-        except(BrokenPipeError):
+        except BrokenPipeError:
             reset_flag = True
             print("*** Source socket (client gateway) is broken (BrokenPipeError). Resetting connection... ***")
 
     if exit_flag or reset_flag:
         try:
             communicator_source.send(cipher.encrypt_and_digest(gateway_common.SOCKET_RESET_MESSAGE, is_reset_msg=True))
-        except(BrokenPipeError):
+        except BrokenPipeError:
             print("*** Unable to send resset message to source socket (client gateway) - BrokenPipeError ***")
 
 
 def handle_transfer(args, source_socket : socket.socket, dest_socket : socket.socket, sym_key : bytes):
     cipher = CipherTypes.get_symcipher_from_args(args, sym_key)   # Shared encryptor/decryptor object for the two threads
     communicator_source = NetComm(source_socket)
-    communicator_dest = NetComm(dest_socket, header_format=gateway_common.MODBUS_TCP_HEADER_FORMAT, length_index=gateway_common.MODBUS_TCP_PAYLOAD_LENGHTH_INDEX,
-                                headerless_send=True, header_receive=True)
+    # communicator_dest = NetComm(dest_socket, header_format=gateway_common.MODBUS_TCP_HEADER_FORMAT, length_index=gateway_common.MODBUS_TCP_PAYLOAD_LENGHTH_INDEX,
+    #                             headerless_send=True, header_receive=True)
+    communicator_dest = NetComm(dest_socket, blind_operation=True)
     
     latency_meter_enc = latency_meter_dec = None
     if args.measure_perf:
@@ -130,7 +131,7 @@ def handle_transfer(args, source_socket : socket.socket, dest_socket : socket.so
     try:
         while forward_source_dest_thread.is_alive() or forward_dest_source_thread.is_alive():
             sleep(1)
-    except(KeyboardInterrupt):
+    except KeyboardInterrupt:
         global exit_flag
         exit_flag = True
         print("Closing program at user request (Ctrl+C)...")
@@ -204,7 +205,7 @@ def main():
         print(f"[*] Established connection to server(destination): {(dest_ip, dest_port)}")
         
         # If sym_key generated successfully proceed with normal data handling
-        if(sym_key != None):
+        if sym_key != None:
             # Set sockets to non-blocking mode
             source_socket.settimeout(gateway_common.SOCKET_TIMEOUT)
             dest_socket.settimeout(gateway_common.SOCKET_TIMEOUT)
@@ -216,12 +217,12 @@ def main():
         # Try to shutdown sockets and then close them
         try:
             source_socket.shutdown(socket.SHUT_RDWR)
-        except(OSError):
+        except OSError:
             print("*** Source socket (client gateway) already closed at the other end ***")
 
         try:
             dest_socket.shutdown(socket.SHUT_RDWR)
-        except(OSError):
+        except OSError:
             print("*** Destination socket (server) already closed at the other end ***")
 
         source_socket.close()

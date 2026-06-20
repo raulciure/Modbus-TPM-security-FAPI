@@ -6,6 +6,7 @@ from time import time
 from enum import IntEnum
 from src.modbus_tpm_security_fapi.packet_format import Formatter
 from src.modbus_tpm_security_fapi.rekeyer import Rekeyer, RekeyerDisabler
+from argparse import ArgumentTypeError
 
 
 class CipherTypes(IntEnum):
@@ -20,31 +21,26 @@ class CipherTypes(IntEnum):
 
     @staticmethod
     def get_cipher_index(cipher_str : str) -> int:
-        if cipher_str == "AES_CCM":
-            return CipherTypes.AES_CCM
-        if cipher_str == "AES_EAX":
-            return CipherTypes.AES_EAX
-        if cipher_str == "AES_GCM":
-            return CipherTypes.AES_GCM
-        if cipher_str == "AES_SIV":
-            return CipherTypes.AES_SIV
-        if cipher_str == "AES_OCB":
-            return CipherTypes.AES_OCB
-        if cipher_str == "CHACHA":
-            return CipherTypes.CHACHA20
-        return 0
+        cipher_mapping = {
+            "AES_CCM" : CipherTypes.AES_CCM,
+            "AES_EAX" : CipherTypes.AES_EAX,
+            "AES_GCM" : CipherTypes.AES_GCM,
+            "AES_SIV" : CipherTypes.AES_SIV,
+            "AES_OCB" : CipherTypes.AES_OCB,
+            "CHACHA20" : CipherTypes.CHACHA20
+        }
+
+        if cipher_str not in cipher_mapping:
+            raise ArgumentTypeError(f"[CipherTypes] cipher type incorrect: \"{cipher_str}\"!\nAllowed choices: {CipherTypes.get_cipher_formatted_list()}")
+        
+        return cipher_mapping[cipher_str]
     
     @staticmethod
-    def get_cipher_list_str() -> list[str]:
+    def get_cipher_formatted_list() -> str:
         attributes = [
             name for name, value in CipherTypes.__dict__.items() if not (name.startswith("__") or name.startswith("_")) and not callable(value)
         ]
 
-        return attributes
-    
-    @staticmethod
-    def get_cipher_formatted_list() -> str:
-        attributes = CipherTypes.get_cipher_list_str()
         return str(attributes)
 
     @staticmethod
@@ -98,7 +94,6 @@ class SymCipher:
     def __init__(self, args, cipher_type : int, sym_key : bytes) -> None:
         self.__cipher_type = cipher_type
         self.__key = sym_key
-        self.__timestamp_tolerance = 1      # Tolerance for timestamp deviation (in seconds)
 
         if args is not None:
             if args.v:
@@ -182,7 +177,7 @@ class SymCipher:
             else:
                 msg = unpad(cipher.decrypt_and_verify(ciphertext, MAC_tag), AES.block_size)
         
-            if self.__timestamp_tolerance > -1:  # Check if replay resistance is disabled
+            if self.__timestamp_tolerance > -1:  # Check if replay resistance is enabled
                 if(abs(timestamp_now - int.from_bytes(timestamp_msg)) > self.__timestamp_tolerance):    # Verify timestamp
                     raise TimeoutError("timestamp different")
                 
@@ -213,7 +208,6 @@ class SymCipher:
             else:   # If old_sym_key is None:
                 raise
         except TimeoutError as e:
-            print("!!! Timestamp is different !!!")
             print("\t", e)
             raise ValueError(e.strerror)
 

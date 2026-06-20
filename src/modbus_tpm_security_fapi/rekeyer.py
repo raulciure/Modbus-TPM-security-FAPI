@@ -192,7 +192,8 @@ class Rekeyer:
         elif self.__recv_state == RekeyStates.REKEY_SWITCH_ACK:
             self.__rekey_switch_time = int(time())          # Set rekey time to current time
             self.__send_state = RekeyStates.REKEY_NONE
-            print("\t* New ECDH key exchange performed! *")
+            if self.__debug_flag >= 3:
+                print("\t* New ECDH key exchange performed! *")
             self.__reset_all()  # Reset attributes to default (to be ready for next rekeying)
 
 
