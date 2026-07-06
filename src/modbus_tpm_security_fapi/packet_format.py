@@ -30,9 +30,9 @@ class Formatter(IntEnum):
         return packed_data
     
     @staticmethod
-    def __pack_payload(format : str, packed_data : bytearray, nonce : bytes, timestamp : bytes, ciphertext : bytes, MAC_tag : bytes):
+    def __pack_payload(format : str, packed_data : bytearray, timestamp : bytes, nonce : bytes, ciphertext : bytes, MAC_tag : bytes):
         struct.pack_into(format, packed_data, Formatter.__HEADER_LENGTH,
-                        nonce, timestamp, ciphertext, MAC_tag)
+                        timestamp, nonce, ciphertext, MAC_tag)
         
         return packed_data
 
@@ -50,10 +50,10 @@ class Formatter(IntEnum):
 
         packed_data = bytearray(packet_size)
 
-        payload_fmt = f"!{nonce_len}s{Formatter.__TIMESTAMP_SIZE}s{ciphertext_len}s{Formatter.__MAC_TAG_SIZE}s"
+        payload_fmt = f"!{Formatter.__TIMESTAMP_SIZE}s{nonce_len}s{ciphertext_len}s{Formatter.__MAC_TAG_SIZE}s"
 
         packed_data = Formatter.__pack_header(packed_data, has_footer, rekey_flag, nonce_len)                   # Pack header
-        packed_data = Formatter.__pack_payload(payload_fmt, packed_data, nonce, timestamp, ciphertext, MAC_tag) # Pack main payload
+        packed_data = Formatter.__pack_payload(payload_fmt, packed_data, timestamp, nonce, ciphertext, MAC_tag) # Pack main payload
         packed_data = Formatter.__pack_footer(packed_data, shared_secret)                                       # Pack footer
         
         return bytes(packed_data)
@@ -83,7 +83,7 @@ class Formatter(IntEnum):
             shared_secret = b''
             ciphertext_len = packet_size - nonce_len - Formatter.__TOTAL_FIXED_SIZE_NORM
         
-        payload_fmt = f"!{nonce_len}s{Formatter.__TIMESTAMP_SIZE}s{ciphertext_len}s{Formatter.__MAC_TAG_SIZE}s"
+        payload_fmt = f"!{Formatter.__TIMESTAMP_SIZE}s{nonce_len}s{ciphertext_len}s{Formatter.__MAC_TAG_SIZE}s"
 
         return (rekey_flag, ) + Formatter.__unpack_payload(payload_fmt, packed_data) + (shared_secret, ) # Unpack payload & return
         
