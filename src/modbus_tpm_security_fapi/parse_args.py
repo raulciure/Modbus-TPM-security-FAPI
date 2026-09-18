@@ -11,8 +11,9 @@ def parse_args_main(prog_path : str):
     parser.add_argument("--host-ip", type=str, metavar="IP_Addr", help="Set custom host IP, as string")
     parser.add_argument("--dest-ip", type=str, metavar="IP_Addr", help="Set custom dest IP, as string")
     parser.add_argument("--measure-perf", action="store_true", help="Measure performance of the cryptographic operations\nNOTE: This function disables replay resistance and rekeying")
-    parser.add_argument("--set-timestamp-tolerance", type=int, default=1, metavar="SECONDS", help="Set custom timestamp tolerance for replay attack resistance, in seconds (default 1)")
+    parser.add_argument("--set-timestamp-tolerance", type=int, default=1, metavar="SECONDS", help="Set custom timestamp tolerance for timestamp-based replay attack resistance, in seconds (default 1)")
     parser.add_argument("--disable-replay-resistance", action="store_true", help="Disable replay attack resistance")
+    parser.add_argument("--set-replay-resistance", type=str.lower, choices=["seq-num", "timestamp"], default="timestamp", help="Set the type of replay attack protection to use [sequence-numbers or timestamps] (default: timestamps). Must be the same on both devices!")
     parser.add_argument("--set-rekey-interval", type=int, default=600, metavar="SECONDS", help="Set custom rekey interval for forward secrecy support, in seconds (default 600)")
     parser.add_argument("--disable-rekeying", action="store_true", help="Disable periodic rekeying and forward secrecy support")
     parser.add_argument("-v", action="store_true", help="Turn on verbose text level 1")
@@ -27,6 +28,9 @@ def parse_args_main(prog_path : str):
     if args.measure_perf:                   # NOTE: Performance/latency measurment disables replay resistance and rekeying!
         args.disable_replay_resistance = True
         args.disable_rekeying = True
+
+    if args.set_replay_resistance == "seq-num" and args.set_timestamp_tolerance != 1:   # If timestamp tolerance is different than the default value (1)
+        parser.error("--set-timestamp-tolerance can only be used with the timestamp-based replay reistance")
 
     return args
 

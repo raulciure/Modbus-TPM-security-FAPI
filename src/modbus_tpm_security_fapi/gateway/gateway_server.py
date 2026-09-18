@@ -35,7 +35,7 @@ def forward_source_dest(communicator_source : NetComm, communicator_dest : NetCo
             break
 
         if debug_level >= 1:
-            print("\nReceived from source: ", enc_data)
+            print("\nReceived from source: ", enc_data.hex(' '))
 
         if debug_level >= 2:
             print("Used key: ", cipher.get_sym_key())
@@ -47,7 +47,7 @@ def forward_source_dest(communicator_source : NetComm, communicator_dest : NetCo
                 data = cipher.decrypt_and_verify(enc_data)
 
             if debug_level >= 1:
-                print("Sent to dest: ", data)
+                print("Sent to dest: ", data.hex(' '))
 
             if data == gateway_common.SOCKET_RESET_MESSAGE:
                 reset_flag = True
@@ -82,7 +82,7 @@ def forward_dest_source(communicator_source : NetComm, communicator_dest : NetCo
             break
 
         if debug_level >= 1:
-            print("\nReceived from dest: ", data)
+            print("\nReceived from dest: ", data.hex(' '))
 
         if latency_meter is not None:
             enc_data = latency_meter.measure_latency(lambda: cipher.encrypt_and_digest(data))
@@ -90,7 +90,7 @@ def forward_dest_source(communicator_source : NetComm, communicator_dest : NetCo
             enc_data = cipher.encrypt_and_digest(data)
 
         if debug_level >= 1:
-            print("Sent to source: ", enc_data)
+            print("Sent to source: ", enc_data.hex(' '))
 
         if debug_level >= 2:
             print("Used key: ", cipher.get_sym_key())
@@ -158,6 +158,8 @@ def main():
 
     # Handle run arguments
     args = parse_args_main(__file__)
+
+    args.is_client = False
 
     if args.host:
         host_ip = args.host
