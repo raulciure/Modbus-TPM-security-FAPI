@@ -18,11 +18,14 @@ RSA_PROFILE_HIERARCHY = "P_RSA2048SHA256-SRK81000100"
 # RSA_PROFILE_HIERARCHY = "P_RSA2048SHA256"
 ECC_PROFILE_HIERARCHY = "P_ECCP256SHA256"
 
+ECC_CONFIG_FILE = "/usr/local/etc/tpm2-tss/fapi-config-ecc.json"
+RSA_CONFIG_FILE = "/usr/local/etc/tpm2-tss/fapi-config-rsa.json"
+
 
 def _get_fapi(profile : str = DEFAULT_PROFILE) -> FAPI:
     profiles = {
-        "ecc" : "/usr/local/etc/tpm2-tss/fapi-config-ecc.json",
-        "rsa" : "/usr/local/etc/tpm2-tss/fapi-config-rsa.json",
+        "ecc" : ECC_CONFIG_FILE,
+        "rsa" : RSA_CONFIG_FILE,
     }
 
     if profile not in profiles:

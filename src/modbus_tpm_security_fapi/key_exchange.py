@@ -1,6 +1,6 @@
-import os
 import socket
 import struct
+from pathlib import Path
 from src.modbus_tpm_security_fapi.security import *
 from src.modbus_tpm_security_fapi.tpm_security import TpmSigner, TpmSealer
 from src.modbus_tpm_security_fapi.netcomm import NetComm
@@ -10,7 +10,9 @@ from src.modbus_tpm_security_fapi.auth_handshake.auth_handshake_common import TP
 HEADER_FORMAT = "!HH"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
-PEER_AUTH_PUB_KEY_FILE_PATH = os.path.join("/home/raul/Desktop/Modbus-TPM-security-FAPI/src/modbus_tpm_security_fapi/auth_handshake", PEER_PUB_KEY_FILE_NAME)
+PARENT_FOLDER = Path(__file__).resolve().parent     # Navigate two levels above current module's containing folder
+PEER_AUTH_PUB_KEY_FILE_PATH = str(PARENT_FOLDER / "auth_handshake" / PEER_PUB_KEY_FILE_NAME)
+
 
 def pack(data : bytes, signature : bytes) -> bytes:
     header = struct.pack(HEADER_FORMAT, len(data), len(signature))
@@ -65,7 +67,7 @@ def DH_key_exchange(gateway_socket : socket.socket):
         return None
     print("peer_auth_pub_key verified locally with the TPM!")
 
-    ECC_key_own =  ECC_key_gen()                        # Generate ephemeral ECC key
+    ECC_key_own = ECC_key_gen()                        # Generate ephemeral ECC key
     print("ECC key generated!")
     ECC_key_own_public_bytes = ECC_key_export(ECC_key_own.public_key())
 

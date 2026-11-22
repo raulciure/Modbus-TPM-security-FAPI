@@ -102,8 +102,9 @@ def forward_dest_source(communicator_source : NetComm, communicator_dest : NetCo
                 break
 
             communicator_source.send(data)
-        except ValueError:
+        except ValueError as e:
             print("**** !!! Message tampered or key is incorrect !!! ****")
+            print(e)
         except BrokenPipeError:
             reset_flag = True
             print("*** Source socket (client) is broken (BrokenPipeError). Resetting connection... ***")

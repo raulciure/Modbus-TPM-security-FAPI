@@ -6,6 +6,20 @@ from Crypto.Protocol import DH
 from Crypto.Protocol.KDF import HKDF
 
 
+def get_keys_fingerprint(*keys : str) -> bytes:
+    keys_bytes = tuple(element.encode("utf-8") for element in keys)
+
+    # Convert to standard (canonical) form
+    standard_ordered_keys = sorted(keys_bytes)
+
+    data = b''
+
+    for key in standard_ordered_keys:
+        data += len(key).to_bytes(4) + key
+
+    return SHA256.new(data).digest()
+
+
 def verify_RSA_signature(RSA_key : bytes | str, data : bytes, signature : bytes) -> bool:
     verifier = pss.new(RSA.import_key(RSA_key))     # Setup signature verifier
     hash = SHA256.new(data)                         # Compute hash for given data
@@ -38,7 +52,7 @@ def ECC_public_key_import(encoded_key : bytes) -> ECC.EccKey:
 # Create a common key based on both parties keys
 def ECDHE_key_agreement(own_key : ECC.EccKey, peer_key : ECC.EccKey) -> bytes:
     def kdf(input):
-        SALT = bytes.fromhex("aa70fb5153d697261376069b636b377f1ee0ec03fdaf452f674caa3500ce47e7")
+        SALT = bytes.fromhex("aa70fb5153d697261376069b636b377f1ee0ec03fdaf452f674caa3500ce47e7")    # non-secret salt for strengthened randomness
         return HKDF(input, key_len=32, salt=SALT, hashmod=SHA256)
 
     session_key = DH.key_agreement(eph_priv=own_key, eph_pub=peer_key, kdf=kdf)

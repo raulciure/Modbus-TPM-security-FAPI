@@ -4,7 +4,7 @@ import os
 
 from src.modbus_tpm_security_fapi.netcomm import NetComm
 from src.modbus_tpm_security_fapi.tpm_security import TpmSigner, TpmSealer, get_random
-from src.modbus_tpm_security_fapi.security import verify_RSA_signature
+from src.modbus_tpm_security_fapi.security import verify_RSA_signature, get_keys_fingerprint
 
 
 TPM_SIGN_KEY_NAME = "dev_auth_key"
@@ -77,7 +77,7 @@ def auth_key_exchange(conn_socket : socket.socket, *, is_client : bool):
             return
         print("Received valid peer signature for own rand!")
 
-    else:
+    else:   # is server
         # Recieve the public key from peer
         peer_rand, peer_signature, peer_public_key = unpack(communicator.receive())
         print("Recieved peer public key & peer signed rand!")
@@ -103,6 +103,12 @@ def auth_key_exchange(conn_socket : socket.socket, *, is_client : bool):
         # Then, send peer_rand signed with own_key
         peer_rand_signed_own, _, _ = tpm_signer.sign_data(peer_rand)
         communicator.send(pack(peer_rand, peer_rand_signed_own))
+
+    print("Exchange fingerprint:\n\t", get_keys_fingerprint(own_pub_key, peer_public_key).hex(), "\n")
+    user_input = input("Confirm pairing? [Y/n]")
+    if user_input not in ("Y", " ", ""):
+        print("Pairing unsuccessful!")
+        return
     
     # Seal peer_public_key hash in the TPM, to prevent tampering     
     peer_public_key_bytes = peer_public_key.strip().encode()

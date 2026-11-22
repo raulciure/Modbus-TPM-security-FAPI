@@ -234,7 +234,7 @@ class SymCipher:
     def get_sym_key(self):
         return self.__key.hex(" ")
 
-    def __encrypt_and_digest(self, msg : bytes):
+    def __encrypt_and_digest(self, msg : bytes, to_auth_send_state : bytes, to_auth_own_public_secret : bytes):
         replay_resistance_data = self.__replay_resistance_processor.get_replay_resistance_data()
 
         cipher = self.__replay_resistance_processor.get_cipher(self.__cipher_type, self.__key)
@@ -242,6 +242,8 @@ class SymCipher:
         nonce = cipher.nonce
 
         cipher.update(replay_resistance_data)
+        cipher.update(to_auth_send_state)
+        cipher.update(to_auth_own_public_secret)
 
         if isinstance(cipher, ChaCha20Poly1305Cipher):
             (ciphertext, MAC_tag) = cipher.encrypt_and_digest(msg)  # ChaCha20 is a stream cipher => no padding required
@@ -253,17 +255,22 @@ class SymCipher:
     def encrypt_and_digest(self, msg : bytes, is_reset_msg : bool = False):
         self.__update_key(called_before_send=True) # Update key from rekeyer (if rekeying took place)
 
-        (replay_resistance_data, nonce, ciphertext, MAC_tag) = self.__encrypt_and_digest(msg)
+        send_state = self.__rekeyer.get_send_state(is_reset_msg)
+        own_public_secret = self.__rekeyer.get_own_public_secret()
+
+        (replay_resistance_data, nonce, ciphertext, MAC_tag) = self.__encrypt_and_digest(msg, send_state.to_bytes(), own_public_secret)
         
-        enc_data = self.__replay_resistance_processor.pack_encrypted_data(self.__rekeyer.get_send_state(is_reset_msg), replay_resistance_data, nonce, ciphertext, MAC_tag, self.__rekeyer.get_own_public_secret())
+        enc_data = self.__replay_resistance_processor.pack_encrypted_data(send_state, replay_resistance_data, nonce, ciphertext, MAC_tag, own_public_secret)
 
         return enc_data
     
-    def __decrypt_and_verify(self, msg_replay_resistance_data, nonce, ciphertext, MAC_tag, sym_key : bytes):
+    def __decrypt_and_verify(self, msg_auth_rekey_flag : bytes, msg_auth_shared_secret : bytes, msg_replay_resistance_data, nonce, ciphertext, MAC_tag, sym_key : bytes):
         cipher = self.__replay_resistance_processor.get_cipher(self.__cipher_type, sym_key, nonce)
 
         try:
             cipher.update(msg_replay_resistance_data)
+            cipher.update(msg_auth_rekey_flag)
+            cipher.update(msg_auth_shared_secret)
 
             if isinstance(cipher, ChaCha20Poly1305Cipher):
                 msg = cipher.decrypt_and_verify(ciphertext, MAC_tag)
@@ -279,16 +286,21 @@ class SymCipher:
     def decrypt_and_verify(self, enc_msg : bytes):
         (rekey_flag, msg_replay_resistance_data, nonce, ciphertext, MAC_tag, shared_secret) = self.__replay_resistance_processor.unpack_encrypted_data(enc_msg)
 
+        # TODO: Formal analysis regarding the necessity of verifying rekey flag and sent DH public key here
+        
+        # Check authenticity of AAD (authenticated associated data)
+        # self.__verify_additional_data(rekey_flag.to_bytes(), shared_secret, msg_replay_resistance_data, nonce, ciphertext, MAC_tag, self.__key)
+
         self.__rekeyer.handle_rekey(self.__key, rekey_flag, shared_secret)
         self.__update_key(called_before_send=False) # Update key from rekeyer (if rekeying took place)
 
         try:
-            return self.__decrypt_and_verify(msg_replay_resistance_data, nonce, ciphertext, MAC_tag, self.__key)
+            return self.__decrypt_and_verify(rekey_flag.to_bytes(), shared_secret, msg_replay_resistance_data, nonce, ciphertext, MAC_tag, self.__key)
         except ValueError:  # Maybe peer has failed key exchange; try decrypting with old key
             old_sym_key = self.__rekeyer.get_old_key()
             if old_sym_key is not None:
                 try:
-                    data = self.__decrypt_and_verify(msg_replay_resistance_data, nonce, ciphertext, MAC_tag, old_sym_key)
+                    data = self.__decrypt_and_verify(rekey_flag.to_bytes(), shared_secret, msg_replay_resistance_data, nonce, ciphertext, MAC_tag, old_sym_key)
                     self.__rekeyer.set_fail_flag()
                     if self.__debug_flag >= 1:
                         print("*** Rekeying failed! Reverting to old key! ***")
